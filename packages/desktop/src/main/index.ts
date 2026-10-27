@@ -261,7 +261,7 @@ const main = Effect.gen(function* () {
   mailboxMain = createMailboxMain({
     // 信箱克隆跟着**全局配置目录**走(凭据/技能/上下文同一处),不跟 userData ——
     // 命令行那侧也落在这里,同一个物理目录才让单实例锁真的是锁。
-    configDir: defaultConfigDir(),
+    configDir: onboardingTestRoot ? join(onboardingTestRoot, "config", "yoma") : defaultConfigDir(),
     // 会话仍在 userData:它是给桌面端回放看的,不是跨进程共享的 agent 状态。
     sessionsRoot: join(app.getPath("userData"), "sessions"),
     enginesDir: resolveEnginesDir(),
@@ -326,6 +326,7 @@ const main = Effect.gen(function* () {
   // yoma 内核进程。整个 app 只 fork 这一个 —— yoma 的 probe 租约、gdb session 表、
   // log capture 都是模块级全局,分片 fork 会让两个进程各自以为自己独占探针。
   kernelProcess = spawnKernel({
+    configDir: onboardingTestRoot ? join(onboardingTestRoot, "config", "yoma") : undefined,
     sessionsRoot: join(app.getPath("userData"), "sessions"),
     stateDir: app.getPath("userData"),
     enginesDir: resolveEnginesDir(),
