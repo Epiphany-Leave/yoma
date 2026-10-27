@@ -157,6 +157,13 @@ app.whenReady().then(async () => {
     check("Pi 登录的浏览器地址与手动回调提示穿过 contextBridge", loginResult.prompt === "manual_code" && loginResult.url, JSON.stringify(loginResult))
     check("过期回复被拒绝、取消登录穿过真实 MessagePort", loginResult.invalid && loginResult.status === "cancelled")
     check("登录状态事件穿桥且没有 token 字段", loginResult.events > 0 && !loginResult.secretFields)
+    const keyRoundTrip = await win.webContents.executeJavaScript(`(async () => {
+      const connected = await window.api.kernel.request('auth.set', { providerID: 'deepseek', apiKey: 'test-only-not-a-real-key' });
+      const removed = await window.api.kernel.request('auth.remove', { providerID: 'deepseek' });
+      return connected.some(p => p.id === 'deepseek' && p.authenticated)
+        && removed.some(p => p.id === 'deepseek' && !p.authenticated);
+    })()`)
+    check("API key 写入与删除经过打包后的凭据锁和原子写入", keyRoundTrip === true)
 
     // 确认条要用的那条新 RPC 也走一遍这座桥:它的结果是**数组**(上面两条都是对象),而前端
     // 每次进会话页与 reload 都会调它一次 —— 这里断言"刚起的内核没有未决确认"。
