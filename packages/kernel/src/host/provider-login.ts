@@ -11,6 +11,7 @@ registerBunOAuthFlows()
 type Login = {
   view: AuthLoginView
   controller: AbortController
+  committing?: boolean
   reply?: { id: string; resolve(value: string): void; reject(reason: unknown): void }
 }
 
@@ -59,11 +60,18 @@ export class ProviderLogin {
           },
         })
         login.controller.signal.throwIfAborted()
-        await this.options.store.modify(providerID, async () => credential, { signal: login.controller.signal })
-        // The exchange succeeded; a catalog refresh failure must not misreport a saved login as failed.
-        await this.options.connected().catch(() => undefined)
+        await this.options.store.modify(providerID, async () => {
+          login.controller.signal.throwIfAborted()
+          // Once the locked atomic commit starts, cancellation cannot undo a saved credential.
+          login.committing = true
+          return credential
+        }, { signal: login.controller.signal })
         if (login.controller.signal.aborted) return
         login.view = { id: login.view.id, providerID, status: "success" }
+        const connected = this.options.connected()
+        this.publish(login)
+        // The exchange succeeded; a catalog refresh failure must not misreport a saved login as failed.
+        await connected.catch(() => undefined)
       } catch {
         if (login.controller.signal.aborted) return
         // Provider errors can contain response bodies or tokens. Never serialize them to the renderer/log.
@@ -98,9 +106,10 @@ export class ProviderLogin {
     login.reply.resolve(value.trim())
   }
 
-  cancel(id?: string): void {
+  cancel(id?: string, closing = false): void {
     const login = id ? this.find(id) : this.current
     if (!login || login.view.status !== "pending") return
+    if (login.committing && !closing) return
     login.controller.abort()
     login.reply?.reject(new Error("Login cancelled"))
     login.view = { id: login.view.id, providerID: login.view.providerID, status: "cancelled" }

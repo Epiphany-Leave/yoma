@@ -878,7 +878,7 @@ export class SessionManager {
 
   /** 移除一个 provider 的 key。同样丢弃模型目录缓存。 */
   async removeAuth(providerID: string): Promise<ProviderInfo[]> {
-    if (providerID === "openai-codex") this.login.cancel()
+    if (providerID === "openai-codex") this.login.cancel(undefined, true)
     await removeAuthKey(providerID, this.configDir)
     this.invalidateModels()
     return this.providers()
@@ -3047,7 +3047,7 @@ export class SessionManager {
   }
 
   async disposeAll(): Promise<void> {
-    this.login.cancel()
+    this.login.cancel(undefined, true)
     // 不再派生、不再投通知;排队中的任务直接落定。
     this.taskManager.shutdown()
     // 在飞的起名与 /btw 掐掉:进程要退了,再写会话名只会撞上正在关的会话,答案也没人看了。
