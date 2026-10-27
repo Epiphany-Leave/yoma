@@ -13,7 +13,7 @@ import { useLanguage } from "@/context/language"
 import { kernel } from "@/utils/kernel"
 import { createProviderCatalog, invalidateProviders } from "./kernel-providers"
 
-export function DialogConnectProvider(props: { provider: string }) {
+export function DialogConnectProvider(props: { provider: string; onBack?: () => void }) {
   const dialog = useDialog()
   const language = useLanguage()
   const providers = createProviderCatalog()
@@ -27,6 +27,7 @@ export function DialogConnectProvider(props: { provider: string }) {
   })
 
   const back = () => {
+    if (props.onBack) return props.onBack()
     void import("./dialog-select-provider").then((x) => {
       dialog.show(() => <x.DialogSelectProvider />)
     })

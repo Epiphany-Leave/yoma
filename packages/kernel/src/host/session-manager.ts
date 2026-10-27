@@ -99,6 +99,10 @@ import { listSerialPorts } from "./tools/log/serial.ts"
 import { createGdbTool, type GdbTool } from "./tools/gdb/session.ts"
 import { withOverwrittenContent } from "./write-before.ts"
 import { configurableProviders, resolveModel, FileCredentialStore } from "./models.ts"
+import { readCustomProviders, saveCustomProvider, removeCustomProvider, discoverCustomModels } from "./custom-providers.ts"
+import type { CustomProviderInput, CustomModelsInput, ProviderUsageView } from "../types.ts"
+import { modelContextOverride, readModelPreferences, setModelContext } from "./model-preferences.ts"
+import { readSubscriptionUsage } from "./provider-usage.ts"
 import { ProviderLogin } from "./provider-login.ts"
 import { discoverSkills, loadContextFiles } from "./resources.ts"
 import { readSessionName } from "./session-names.ts"
@@ -131,7 +135,7 @@ import { Identifier } from "../ids.ts"
 import { pickThinkingLevel } from "../thinking.ts"
 import { sessionNotFound, subagentSession } from "../types.ts"
 import { MANUAL_COMPACTION_ENTRY, removalEvents, SessionProjection } from "./projector.ts"
-import { migrateLegacyPiAuth, yomaConfigDir, removeAuthKey, writeAuthKey } from "./auth.ts"
+import { migrateLegacyPiAuth, yomaConfigDir, removeAuthKey, writeAuthKey, authFilePath } from "./auth.ts"
 
 /** 同时活着的 harness 上限。淘汰只是丢弃内存态,重开就是 repo.open + 重放,很便宜。钉住的(子 agent 任务在用)不算。 */
 const MAX_LIVE_SESSIONS = 8
@@ -763,6 +767,7 @@ export class SessionManager {
     // 只要一个 key 就能连的 provider(yoma 按 pi-ai 的 login 流程推导)。没配的也要列出来
     // (空模型表 + authenticated: false),用户才能从连接对话框里给它加 key。
     const configurable = [...await configurableProviders(), { id: "openai-codex", name: "OpenAI Codex / ChatGPT" }]
+    const custom = await readCustomProviders(new FileCredentialStore(authFilePath(this.configDir))).catch(() => [])
     let models: Models
     try {
       models = (await this.ensureModels()).models
@@ -774,19 +779,22 @@ export class SessionManager {
 
     // resolveModel() 的不变式:注册 == 已配置(没凭据的它不注册),所以注册表里的一律 authenticated。
     const out: ProviderInfo[] = []
+    const preferences = readModelPreferences(this.configDir)
     for (const provider of models.getProviders()) {
       out.push({
         id: provider.id,
         name: provider.id === "openai-codex" ? "OpenAI Codex / ChatGPT" : provider.name,
         authenticated: true,
+        custom: custom.find((entry) => entry.id === provider.id)?.config,
         models: provider.getModels().map((model) => ({
           id: model.id,
           providerID: provider.id,
           name: model.name ?? model.id,
           thinkingLevels: getSupportedThinkingLevels(model) as string[],
           contextWindow: model.contextWindow,
+          contextWindowOverride: modelContextOverride(preferences, provider.id, model.id),
           maxOutput: model.maxTokens,
-          cost: model.cost
+          cost: !custom.some((entry) => entry.id === provider.id) && model.cost
             ? {
                 input: model.cost.input,
                 output: model.cost.output,
@@ -874,6 +882,39 @@ export class SessionManager {
     await writeAuthKey(providerID, trimmed, this.configDir)
     this.invalidateModels()
     return this.providers()
+  }
+
+  async saveCustom(input: CustomProviderInput): Promise<ProviderInfo[]> {
+    await saveCustomProvider(new FileCredentialStore(authFilePath(this.configDir)), input)
+    return this.customChanged()
+  }
+
+  discoverCustom(input: CustomModelsInput): Promise<string[]> {
+    return discoverCustomModels(new FileCredentialStore(authFilePath(this.configDir)), input)
+  }
+
+  providerUsage(providerID: string): Promise<ProviderUsageView> {
+    if (providerID !== "openai-codex") throw new Error("Subscription usage is only available for OpenAI Codex")
+    return readSubscriptionUsage(new FileCredentialStore(authFilePath(this.configDir)))
+  }
+
+  async setModelContext(input: { providerID: string; modelID: string; contextWindow?: number }): Promise<ProviderInfo[]> {
+    const { models } = await this.ensureModels()
+    if (!models.getModel(input.providerID, input.modelID)) throw new Error("Unknown model")
+    await setModelContext(this.configDir, input.providerID, input.modelID, input.contextWindow)
+    return this.customChanged()
+  }
+
+  async removeCustom(providerID: string): Promise<ProviderInfo[]> {
+    await removeCustomProvider(new FileCredentialStore(authFilePath(this.configDir)), providerID)
+    return this.customChanged()
+  }
+
+  private async customChanged(): Promise<ProviderInfo[]> {
+    this.invalidateModels()
+    const providers = await this.providers()
+    this.options.emit([{ type: "model.updated", providers }])
+    return providers
   }
 
   /** 移除一个 provider 的 key。同样丢弃模型目录缓存。 */

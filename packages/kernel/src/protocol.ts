@@ -25,6 +25,9 @@ import type {
   Message,
   Part,
   ProviderInfo,
+  CustomProviderInput,
+  CustomModelsInput,
+  ProviderUsageView,
   QueuedItemView,
   Session,
   SessionStatus,
@@ -225,6 +228,11 @@ export interface KernelMethods {
   "task.background": { params: { taskID: string }; result: { moved: boolean } }
 
   "model.list": { params: void; result: ProviderInfo[] }
+  "model.customSave": { params: CustomProviderInput; result: ProviderInfo[] }
+  "model.customDiscover": { params: CustomModelsInput; result: string[] }
+  "model.context": { params: { providerID: string; modelID: string; contextWindow?: number }; result: ProviderInfo[] }
+  "model.usage": { params: { providerID: string }; result: ProviderUsageView }
+  "model.customRemove": { params: { providerID: string }; result: ProviderInfo[] }
   /**
    * 联网刷新模型目录并落盘缓存(`<configDir>/models-store.json`),返回刷新后的完整列表。
    *

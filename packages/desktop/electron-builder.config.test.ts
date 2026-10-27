@@ -37,6 +37,13 @@ for (const channel of channels) {
     expect(config.nsis?.oneClick).toBe(false)
     expect(config.nsis?.allowToChangeInstallationDirectory).toBe(true)
     expect(config.nsis?.perMachine).toBe(false)
+    expect(config.nsis?.runAfterFinish).toBe(true)
+    expect(config.nsis?.createDesktopShortcut).not.toBe(false)
+    expect(config.nsis?.createStartMenuShortcut).not.toBe(false)
+    expect(existsSync(path.join(here, config.nsis!.include!))).toBe(true)
+    expect(config.productName).toBe(
+      channel.channel === "prod" ? "Yoma" : `Yoma ${channel.channel === "dev" ? "Dev" : "Beta"}`,
+    )
     // "只通知"更新器打开的发布页与 publish 指的必须是同一个仓库;dev 渠道两样都没有。
     const releaseRepo = (config.extraMetadata as { yoma?: { releaseRepo?: string } }).yoma?.releaseRepo
     const publish = config.publish as { owner?: string; repo?: string } | undefined

@@ -3,7 +3,7 @@
  *
  * 目录改成从 `kernel.model.list()` 读 —— 不再走 opencode 的 config/provider 下发,
  * 也没有 `release_date` / `family` 推导出来的 "latest" 标签、没有 opencode zen 的免费标记、
- * 没有模型可见性管理(那是为几百个模型的目录设计的,yoma 的目录只有已配置凭据的 provider)。
+ * 设置页的模型开关决定哪些模型出现在选择器中。
  *
  * 新增的是 **thinking 档位**:`ModelInfo.thinkingLevels` 是内核真有而 opencode 没有的能力,
  * 选中的档位存在 local 的 variant 通道里(同一个概念,opencode 叫 variant,内核叫 thinking),
@@ -65,7 +65,11 @@ const ModelList: Component<{
   const providers = createProviderCatalog()
 
   const models = createMemo(() =>
-    flattenModels(providers()).filter((m) => (props.provider ? m.provider.id === props.provider : true)),
+    flattenModels(providers()).filter(
+      (m) =>
+        (!props.provider || m.provider.id === props.provider) &&
+        model.visible({ providerID: m.provider.id, modelID: m.id }),
+    ),
   )
 
   const selected = createMemo(() => {

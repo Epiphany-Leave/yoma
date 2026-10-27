@@ -105,6 +105,11 @@ export interface KernelClient {
     list(params: { directory: string }): Promise<AgentInfo[]>
   }
   model: {
+    discoverCustom(params: KernelParams<"model.customDiscover">): Promise<string[]>
+    setContext(params: KernelParams<"model.context">): Promise<ProviderInfo[]>
+    usage(providerID: string): Promise<KernelResult<"model.usage">>
+    saveCustom(params: KernelParams<"model.customSave">): Promise<ProviderInfo[]>
+    removeCustom(providerID: string): Promise<ProviderInfo[]>
     loginStart(params: KernelParams<"auth.loginStart">): Promise<KernelResult<"auth.loginStart">>
     loginStatus(id?: string): Promise<KernelResult<"auth.loginStatus">>
     loginReply(params: KernelParams<"auth.loginReply">): Promise<void>
@@ -208,6 +213,11 @@ export function createKernelClient(transport: KernelTransport): KernelClient {
       list: (params) => call("agent.list", params),
     },
     model: {
+      discoverCustom: (params) => call("model.customDiscover", params),
+      setContext: (params) => call("model.context", params),
+      usage: (providerID) => call("model.usage", { providerID }),
+      saveCustom: (params) => call("model.customSave", params),
+      removeCustom: (providerID) => call("model.customRemove", { providerID }),
       loginStart: (params) => call("auth.loginStart", params),
       loginStatus: (id) => call("auth.loginStatus", { id }),
       loginReply: (params) => call("auth.loginReply", params),

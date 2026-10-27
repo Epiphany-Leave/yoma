@@ -37,6 +37,8 @@ import {
 	type Provider,
 } from "@earendil-works/pi-ai";
 import { builtinProviders, getBuiltinModelDataGeneratedAt } from "@earendil-works/pi-ai/providers/all";
+import { customProvider, readCustomProviders } from "./custom-providers.ts";
+import { readModelPreferences, withModelPreferences } from "./model-preferences.ts";
 import { catalogBaseUrlFromEnv, withRemoteCatalog } from "./model-catalog.ts";
 import { FileModelsStore } from "./models-store.ts";
 import { streamIdleMsFromEnv, withStreamGuard } from "./stream-guard.ts";
@@ -201,11 +203,12 @@ export function guardModels<T extends Models>(models: T, options: { trace?: Trac
  */
 export async function resolveModel(configDir: string, options?: ResolveModelOptions): Promise<ResolvedModel> {
 	const authPath = join(configDir, "auth.json");
+	const credentials = new FileCredentialStore(authPath);
 	const settings = readJson(join(configDir, "settings.json")) ?? {};
 	// 流的空闲看门狗与 HTTP 探针挂在这一层:所有宿主的每次请求都经这个 Models 的 streamSimple。
 	const models = guardModels(
 		createModels({
-			credentials: new FileCredentialStore(authPath),
+			credentials,
 			authContext: options?.authContext,
 			// 模型目录的本机缓存。内建目录是随版本冻结的快照,厂商上新比我们发版快 —— 见 models-store.ts。
 			modelsStore: new FileModelsStore(configDir),
@@ -222,7 +225,9 @@ export async function resolveModel(configDir: string, options?: ResolveModelOpti
 			: provider,
 		remoteCatalog,
 	));
-	for (const provider of builtin) models.setProvider(provider);
+	for (const entry of await readCustomProviders(credentials)) builtin.push(customProvider(entry.id, entry.config));
+	const preferences = readModelPreferences(configDir);
+	for (const provider of builtin) models.setProvider(withModelPreferences(provider, preferences));
 	const configured: string[] = [];
 	for (const provider of builtin) {
 		if (await models.checkAuth(provider.id)) configured.push(provider.id);

@@ -46,8 +46,12 @@ Connect a provider using an API key, or select **OpenAI Codex / ChatGPT** to sig
 
 The serial monitor and manual GDB controls work without a model connection.
 
-- First time: the banner at the top says "No API key configured yet" → click **Connect**
-- Afterwards: top-left menu **File → Settings** (or `Ctrl+,`) → **Providers** → choose a provider → **Connect**. For ChatGPT, complete authorization in the browser; for other providers, enter your API key.
+- First time: click **Configure** in the banner at the top to open provider settings.
+- Afterwards: top-left menu **File → Settings** (or `Ctrl+,`) → **Models** → **Add provider**. For ChatGPT, complete authorization in the browser; for other providers, enter your API key.
+
+**Models** combines provider connections, model visibility and context windows. A blank context window uses the provider default; changes apply to subsequent requests. ChatGPT connections can query account usage and link to the official usage page; unavailable values are not treated as zero.
+
+**Add provider** separates custom endpoints, subscriptions and API keys. For an OpenAI-compatible gateway, enter its Base URL and key, then **Import models from endpoint** (OpenAI `/models`). Manual model IDs remain available if the endpoint does not list them. Custom endpoints use Chat Completions for text, streaming and tool calls; set the context and output limits to match the service. Editing with a blank key keeps it; changing the URL requires entering the key again.
 
 ### 3. Toolchains (compiler / CMake / OpenOCD / GDB …)
 

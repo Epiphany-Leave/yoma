@@ -193,6 +193,11 @@ export function createKernelHost(options: KernelHostOptions): KernelHost {
     "task.background": async ({ taskID }) => ({ moved: sessions.backgroundTask(taskID) }),
 
     "model.list": () => sessions.providers(),
+    "model.customSave": (input) => sessions.saveCustom(input),
+    "model.customDiscover": (input) => sessions.discoverCustom(input),
+    "model.context": (input) => sessions.setModelContext(input),
+    "model.usage": ({ providerID }) => sessions.providerUsage(providerID),
+    "model.customRemove": ({ providerID }) => sessions.removeCustom(providerID),
     // 唯一一条主动碰模型目录网络的 RPC(开会话只恢复磁盘缓存)。设置页的"刷新模型列表"走它。
     "model.refresh": () => sessions.refreshModels(),
     "auth.loginStart": ({ providerID, method }) => sessions.login.start(providerID, method),
