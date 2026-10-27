@@ -10,6 +10,7 @@
  */
 
 import { join } from "node:path"
+import { net } from "electron"
 
 import { createKernelHost, kernelSelfCheck, type KernelHost } from "@yoma-desktop/kernel/host"
 import { DEFAULT_THINKING_LEVEL, diffToolNames, type KernelEvent, type KernelFrame } from "@yoma-desktop/kernel"
@@ -117,6 +118,8 @@ if (parentPort) {
     const data = event.data as { type?: string } | undefined
     if (data?.type === "start") {
       const command = data as StartCommand
+      // Chromium follows the system proxy/PAC; Node fetch does not (including OAuth token exchange).
+      globalThis.fetch = (input, init) => net.fetch(input instanceof URL ? input.toString() : input, init)
       host = createKernelHost({
         codexTransport: "sse",
         sessionsRoot: command.sessionsRoot,
