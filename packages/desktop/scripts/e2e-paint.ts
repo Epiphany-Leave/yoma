@@ -558,6 +558,8 @@ try {
   await sleep(1_500) // 让晚到的 provider / 查询把它们要抛的异常抛出来
   check("首屏没崩到错误页", (await evaluate<boolean>(CRASHED)) === false)
   drain("首屏")
+  const testAuthFile = await evaluate<string>(`window.api.kernel.request('app.preflight', undefined).then(r => r.auth.file)`)
+  check("测试配置的凭据目录与正式版隔离", testAuthFile.startsWith(tmpRoot))
 
   // Subscription setup is a real renderer view; opening it must not start a login by itself.
   await clickText(["设置", "Settings"])
