@@ -1,7 +1,5 @@
-import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
 import * as http from "node:http"
-import { homedir, tmpdir } from "node:os"
+import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { getCACertificates, setDefaultCACertificates } from "node:tls"
@@ -15,6 +13,7 @@ import contextMenu from "electron-context-menu"
 import { DESKTOP_APP_IDS, defaultConfigDir } from "@yoma-desktop/bench/mailbox/paths"
 
 import { CHANNEL } from "./constants"
+import { prepareTestProfile } from "./test-profile"
 import { registerIpcHandlers, sendMenuCommand } from "./ipc"
 import { spawnKernel, type KernelProcess } from "./kernel"
 import { createMailboxMain, type MailboxMain } from "./mailbox"
@@ -134,12 +133,9 @@ const main = Effect.gen(function* () {
   const onboardingTestRoot = ((): string | undefined => {
     if (!TEST_ONBOARDING) return
 
-    const root = join(tmpdir(), `yoma-onboarding-${randomUUID()}`)
-    rmSync(root, { recursive: true, force: true })
-    ;["data", "config", "cache", "state", "desktop", "session"].forEach((dir) =>
-      mkdirSync(join(root, dir), { recursive: true }),
-    )
-    process.env.YOMA_DB = ":memory:"
+    const persistentRoot = process.env.YOMA_TEST_PROFILE_DIR?.trim() || undefined
+    const root = prepareTestProfile(persistentRoot)
+    if (!persistentRoot) process.env.YOMA_DB = ":memory:"
     process.env.XDG_DATA_HOME = join(root, "data")
     process.env.XDG_CONFIG_HOME = join(root, "config")
     process.env.XDG_CACHE_HOME = join(root, "cache")

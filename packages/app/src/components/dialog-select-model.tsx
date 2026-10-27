@@ -5,13 +5,11 @@
  * 也没有 `release_date` / `family` 推导出来的 "latest" 标签、没有 opencode zen 的免费标记、
  * 设置页的模型开关决定哪些模型出现在选择器中。
  *
- * 新增的是 **thinking 档位**:`ModelInfo.thinkingLevels` 是内核真有而 opencode 没有的能力,
- * 选中的档位存在 local 的 variant 通道里(同一个概念,opencode 叫 variant,内核叫 thinking),
- * 由 composer 在发起一轮时随 `session.setModel` 一起下发。
+ * 思考强度由 composer 的专用下拉管理,此处只选模型。
  */
 
 import { Popover as Kobalte } from "@kobalte/core/popover"
-import { Component, ComponentProps, createMemo, For, JSX, Show, ValidComponent } from "solid-js"
+import { Component, ComponentProps, createMemo, JSX, ValidComponent } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocal } from "@/context/local"
 import { useDialog } from "@yoma-desktop/ui/context/dialog"
@@ -25,33 +23,6 @@ import { useLanguage } from "@/context/language"
 import { createProviderCatalog, flattenModels, type CatalogModel } from "./kernel-providers"
 
 type ModelState = ReturnType<typeof useLocal>["model"]
-
-/** 当前选中模型支持的 thinking 档位。没有档位的模型整块不渲染。 */
-const ThinkingLevels: Component<{ levels: string[]; model: ModelState }> = (props) => {
-  const language = useLanguage()
-  const current = () => props.model.variant.current()
-
-  return (
-    <Show when={props.levels.length > 0}>
-      <div
-        class="flex items-center gap-1 flex-wrap px-4 pt-2"
-        title={language.t("command.model.variant.cycle.description")}
-      >
-        <For each={props.levels}>
-          {(level) => (
-            <Button
-              size="small"
-              variant={current() === level ? "primary" : "ghost"}
-              onClick={() => props.model.variant.set(level)}
-            >
-              {level}
-            </Button>
-          )}
-        </For>
-      </div>
-    </Show>
-  )
-}
 
 const ModelList: Component<{
   provider?: string
@@ -114,7 +85,6 @@ const ModelList: Component<{
           </div>
         )}
       </List>
-      <ThinkingLevels levels={selected()?.thinkingLevels ?? []} model={model} />
     </>
   )
 }

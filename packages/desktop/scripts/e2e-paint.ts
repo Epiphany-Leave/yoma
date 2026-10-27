@@ -269,6 +269,7 @@ const child = spawn(
     env: {
       ...process.env,
       YOMA_TEST_ONBOARDING: "1",
+      YOMA_TEST_PROFILE_DIR: "",
       YOMA_CHANNEL: "dev",
       TMPDIR: tmpRoot,
       TMP: tmpRoot,
@@ -791,6 +792,29 @@ try {
       APPEAR_TIMEOUT_MS,
     ),
   )
+  check(
+    "高级区条目标题和说明均为中文",
+    await evaluate<boolean>(`(() => {
+    const row = (action) => document.querySelector('[data-action="' + action + '"]')?.closest('[data-component="settings-v2-row"]')?.textContent ?? '';
+    const file = row('settings-show-file-tree'), search = row('settings-show-search');
+    return file.includes('文件树') && file.includes('在会话中显示文件树面板') && search.includes('命令面板') && search.includes('在标题栏显示搜索和命令面板按钮');
+  })()`),
+  )
+  if (process.env.YOMA_PAINT_SCREENSHOT_GENERAL) {
+    await evaluate(
+      `document.querySelector('[data-action="settings-show-search"]')?.scrollIntoView({ block: 'center' })`,
+    )
+    const shot = await send("Page.captureScreenshot", { format: "png" })
+    writeFileSync(process.env.YOMA_PAINT_SCREENSHOT_GENERAL, Buffer.from(shot.result!.data as string, "base64"))
+  }
+  const reasoningModel = await evaluate<{
+    id: string
+    levels: string[]
+  }>(`window.api.kernel.request('auth.set', { providerID: 'deepseek', apiKey: 'e2e-only-not-a-real-key' }).then(ps => {
+    const model = ps.find(p => p.id === 'deepseek')?.models.find(m => m.thinkingLevels.length > 0);
+    return { id: model?.id, levels: model?.thinkingLevels };
+  })`)
+  check("验证使用真实支持思考强度的模型目录", !!reasoningModel?.id && reasoningModel.levels.length > 0)
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
   drain("ChatGPT 登录视图")
@@ -865,6 +889,24 @@ try {
     "关闭模型不会出现在选择器中",
     await evaluate<boolean>(`!document.querySelector('[data-key="${customSaved.id}:paint-two"]')`),
   )
+  await evaluate(`document.querySelector('[data-key="deepseek:${reasoningModel.id}"]')?.click()`)
+  check(
+    "思考强度专用下拉保留",
+    await waitFor(`!!document.querySelector('[data-action="prompt-model-variant"]')`, APPEAR_TIMEOUT_MS),
+  )
+  await evaluate(`document.querySelector('[data-action="prompt-model"]')?.click()`)
+  await waitFor(`!!document.querySelector('[data-key="deepseek:${reasoningModel.id}"]')`, APPEAR_TIMEOUT_MS)
+  check(
+    "模型列表不再重复显示思考强度按钮",
+    await evaluate<boolean>(`(() => {
+    const picker = document.querySelector('[data-key="deepseek:${reasoningModel.id}"]')?.closest('[data-component="list"]')?.parentElement;
+    return !!picker && ![...picker.querySelectorAll('button')].some(button => ${json(reasoningModel.levels)}.includes(button.textContent.trim()));
+  })()`),
+  )
+  if (process.env.YOMA_PAINT_SCREENSHOT_PICKER) {
+    const shot = await send("Page.captureScreenshot", { format: "png" })
+    writeFileSync(process.env.YOMA_PAINT_SCREENSHOT_PICKER, Buffer.from(shot.result!.data as string, "base64"))
+  }
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
   await clickText(["设置", "Settings"])
@@ -873,6 +915,7 @@ try {
     `(() => { const tab = [...document.querySelectorAll('[role="tab"]')].find(e => /模型|Models/.test(e.textContent)); tab?.click() })()`,
   )
   await waitFor(`!!(${customRow})`, APPEAR_TIMEOUT_MS)
+  await evaluate(`(${customRow})?.click()`)
   await clickText(["删除", "Delete"])
   check("删除自定义供应商后目录同步移除", await waitFor(`!(${customRow})`, APPEAR_TIMEOUT_MS))
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
