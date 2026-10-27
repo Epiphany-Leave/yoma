@@ -20,11 +20,14 @@
  * readonly,harness 建好之后换不掉注册表,跨 provider 的 setModel() 只有在 provider 提前
  * 注册好的前提下才不会在发请求时才炸。
  */
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import lockfile from "proper-lockfile";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
 	type AuthContext,
+	type AuthOperationOptions,
 	createModels,
 	type Credential,
 	type CredentialInfo,
@@ -70,14 +73,18 @@ export const LOGS_DIR = join(CONFIG_DIR, "logs");
 
 /** 文件版凭证仓库:<configDir>/auth.json,0600。每次 read 重读文件。 */
 export class FileCredentialStore implements CredentialStore {
-	private chain: Promise<unknown> = Promise.resolve();
-
 	constructor(private readonly path: string) {}
 
 	private load(): { data: Record<string, Credential>; healed: boolean } {
-		const raw = readJson(this.path) ?? {};
-		if (!raw || typeof raw !== "object") return { data: {}, healed: false };
-		const data: Record<string, Credential> = {};
+		let raw: unknown;
+		try { raw = JSON.parse(readFileSync(this.path, "utf8")); }
+		catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return { data: {}, healed: false };
+			throw new Error("Cannot read auth.json; repair or restore it before changing credentials", { cause: error });
+		}
+		if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid auth.json: expected an object");
+		// Preserve entries we do not understand when updating another provider.
+		const data = { ...raw } as Record<string, Credential>;
 		let healed = false;
 		for (const [id, entry] of Object.entries(raw as Record<string, unknown>)) {
 			const coerced = coerceCredential(entry);
@@ -88,51 +95,69 @@ export class FileCredentialStore implements CredentialStore {
 		return { data, healed };
 	}
 
-	private save(data: Record<string, Credential>): void {
+	private save(data: Record<string, Credential>, signal?: AbortSignal): void {
 		mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-		writeFileSync(this.path, `${JSON.stringify(data, null, "\t")}\n`, { encoding: "utf8", mode: 0o600 });
-		chmodSync(this.path, 0o600);
+		const temp = `${this.path}.${randomUUID()}.tmp`;
+		try {
+			writeFileSync(temp, `${JSON.stringify(data, null, "\t")}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+			chmodSync(temp, 0o600);
+			signal?.throwIfAborted();
+			renameSync(temp, this.path);
+		} finally { rmSync(temp, { force: true }); }
 	}
 
-	async read(providerId: string): Promise<Credential | undefined> {
+	private async locked<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+		signal?.throwIfAborted();
+		mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
+		const release = await lockfile.lock(this.path, {
+			realpath: false, stale: 60_000, update: 10_000,
+			retries: { retries: 120, minTimeout: 50, maxTimeout: 1000 },
+		});
+		try { signal?.throwIfAborted(); return await fn(); }
+		finally { await release(); }
+	}
+
+	async read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+		options?.signal?.throwIfAborted();
 		const { data, healed } = this.load();
-		if (healed) this.save(data);
-		return data[providerId];
+		if (healed) return this.modify(providerId, async () => undefined, options);
+		return coerceCredential(data[providerId])?.credential;
 	}
 
 	async list(): Promise<readonly CredentialInfo[]> {
-		return Object.entries(this.load().data).map(([providerId, c]) => ({ providerId, type: c.type }));
+		return Object.entries(this.load().data).flatMap(([providerId, c]) => {
+			const entry = coerceCredential(c);
+			return entry ? [{ providerId, type: entry.credential.type }] : [];
+		});
 	}
 
 	modify(
 		providerId: string,
 		fn: (current: Credential | undefined) => Promise<Credential | undefined>,
+		options?: AuthOperationOptions,
 	): Promise<Credential | undefined> {
-		const task = this.chain.then(async () => {
+		return this.locked(async () => {
 			const { data, healed } = this.load();
-			const next = await fn(data[providerId]);
+			const next = await fn(coerceCredential(data[providerId])?.credential);
+			options?.signal?.throwIfAborted();
 			if (next !== undefined) {
 				data[providerId] = next;
-				this.save(data);
+				this.save(data, options?.signal);
 			} else if (healed) {
-				this.save(data);
+				this.save(data, options?.signal);
 			}
-			return data[providerId];
-		});
-		this.chain = task.catch(() => {});
-		return task;
+			return coerceCredential(data[providerId])?.credential;
+		}, options?.signal);
 	}
 
-	delete(providerId: string): Promise<void> {
-		const task = this.chain.then(async () => {
+	delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
+		return this.locked(async () => {
 			const { data } = this.load();
 			if (providerId in data) {
 				delete data[providerId];
-				this.save(data);
+				this.save(data, options?.signal);
 			}
-		});
-		this.chain = task.catch(() => {});
-		return task;
+		}, options?.signal);
 	}
 }
 
@@ -143,6 +168,7 @@ export const NO_AMBIENT_AUTH: AuthContext = {
 };
 
 export interface ResolveModelOptions {
+	codexTransport?: "sse";
 	authContext?: AuthContext;
 	/** 宿主的显式选择(如 CLI 参数或恢复的会话),优先于环境与默认设置。 */
 	provider?: string;
@@ -190,7 +216,12 @@ export async function resolveModel(configDir: string, options?: ResolveModelOpti
 	// 每个 provider 都包一层远端目录(自带 refreshModels 的原样返回)。不包的话,静态 provider
 	// 的模型表就是随版本冻结的那一份,厂商新出的模型永远不会出现 —— 见 model-catalog.ts。
 	const remoteCatalog = { baseUrl: catalogBaseUrlFromEnv(), builtinGeneratedAt: getBuiltinModelDataGeneratedAt() };
-	const builtin = builtinProviders().map((provider) => withRemoteCatalog(provider, remoteCatalog));
+	const builtin = builtinProviders().map((provider) => withRemoteCatalog(
+		provider.id === "openai-codex" && options?.codexTransport
+			? { ...provider, streamSimple: (model, context, opts) => provider.streamSimple(model, context, { ...opts, transport: options.codexTransport }) }
+			: provider,
+		remoteCatalog,
+	));
 	for (const provider of builtin) models.setProvider(provider);
 	const configured: string[] = [];
 	for (const provider of builtin) {

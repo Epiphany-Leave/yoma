@@ -60,7 +60,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  child.postMessage({ type: "start", sessionsRoot, stateDir, enginesDir, version: "e2e-r" })
+  child.postMessage({ type: "start", sessionsRoot, stateDir, configDir: join(stateDir, "config"), enginesDir, version: "e2e-r" })
 
   // webPreferences 必须和 windows.ts 里的真窗口逐字一致 —— sandbox / contextIsolation
   // 正是决定 Error 会不会被剥壳的开关,抄错一个这个测试就白做了。
@@ -131,6 +131,32 @@ app.whenReady().then(async () => {
         .then((s) => ({ id: s && s.id }), (e) => ({ error: e && e.message }))
     `)
     check("窗口里能真的建会话", typeof created?.id === "string" && created.id.length > 0, JSON.stringify(created))
+
+    // Native Pi browser flow, without opening a browser or exchanging real credentials.
+    const loginResult = await win.webContents.executeJavaScript(`(async () => {
+      const bridge = window.api.kernel;
+      const events = [];
+      const off = bridge.subscribe(batch => events.push(...batch.filter(e => e.type === 'auth.login')));
+      try {
+        const login = await bridge.request('auth.loginStart', { providerID: 'openai-codex' });
+        let state;
+        for (let i = 0; i < 100; i++) {
+          state = await bridge.request('auth.loginStatus', { id: login.id });
+          if (state.prompt || state.status !== 'pending') break;
+          await new Promise(r => setTimeout(r, 50));
+        }
+        const invalid = await bridge.request('auth.loginReply', { id: login.id, promptID: 'expired', value: 'fake' })
+          .then(() => false, () => true);
+        await bridge.request('auth.loginCancel', { id: login.id });
+        const cancelled = await bridge.request('auth.loginStatus', { id: login.id });
+        return { prompt: state.prompt?.type, url: state.notice?.url?.startsWith('https://auth.openai.com/'),
+          invalid, status: cancelled.status, events: events.length,
+          secretFields: /"(access|refresh|access_token|refresh_token)"/.test(JSON.stringify(events)) };
+      } finally { off(); }
+    })()`)
+    check("Pi 登录的浏览器地址与手动回调提示穿过 contextBridge", loginResult.prompt === "manual_code" && loginResult.url, JSON.stringify(loginResult))
+    check("过期回复被拒绝、取消登录穿过真实 MessagePort", loginResult.invalid && loginResult.status === "cancelled")
+    check("登录状态事件穿桥且没有 token 字段", loginResult.events > 0 && !loginResult.secretFields)
 
     // 确认条要用的那条新 RPC 也走一遍这座桥:它的结果是**数组**(上面两条都是对象),而前端
     // 每次进会话页与 reload 都会调它一次 —— 这里断言"刚起的内核没有未决确认"。

@@ -20,6 +20,8 @@ type StartCommand = {
   type: "start"
   sessionsRoot: string
   stateDir: string
+  /** Isolated configuration for integration tests; production uses ~/.yoma. */
+  configDir?: string
   enginesDir?: string
   version?: string
   /** 本次启动的日志目录(main 的 logging.ts):调试轨迹写这里的 trace.jsonl。 */
@@ -116,8 +118,10 @@ if (parentPort) {
     if (data?.type === "start") {
       const command = data as StartCommand
       host = createKernelHost({
+        codexTransport: "sse",
         sessionsRoot: command.sessionsRoot,
         stateDir: command.stateDir,
+        configDir: command.configDir,
         enginesDir: command.enginesDir,
         version: command.version,
         // 没人选档时不要落到 harness 的 "off"。

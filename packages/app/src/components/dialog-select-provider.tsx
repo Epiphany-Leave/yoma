@@ -44,7 +44,7 @@ export const DialogSelectProvider: Component = () => {
             <ProviderIcon data-slot="list-item-extra-icon" id={i.id} />
             <span>{i.name}</span>
             <Show when={i.authenticated}>
-              <Tag>{language.t("provider.connect.method.apiKey")}</Tag>
+              <Tag>{i.id === "openai-codex" ? "ChatGPT" : language.t("provider.connect.method.apiKey")}</Tag>
             </Show>
           </div>
         )}

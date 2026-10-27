@@ -40,14 +40,14 @@ Installers are published on [GitHub Releases](https://github.com/yoma-embedded/y
 - **Windows**: download `yoma-win-x64.exe`. The installer may show "Windows protected your PC": choose **More info → Run anyway**.
 - **macOS (Apple Silicon)**: download `yoma-mac-arm64.dmg`, open it and drag Yoma into Applications. The package is not signed with an Apple Developer ID yet, so the first launch is blocked: open **System Settings → Privacy & Security** and click **Open Anyway** at the bottom, or run `xattr -dr com.apple.quarantine /Applications/Yoma.app` in a terminal. This build does not install updates by itself: when a new version is out the app tells you and opens the download page; install it over the old one (and allow it once more). There is no Intel Mac package yet, and the logic-analyzer engine is not bundled on macOS yet.
 
-### 2. Configure an API key
+### 2. Connect a model
 
-Currently only DeepSeek and Kimi are supported.
+Connect a provider using an API key, or select **OpenAI Codex / ChatGPT** to sign in with an eligible ChatGPT subscription. Subscription access is separate from OpenAI API credit. Browser login is the default; device code and manual callback input are available when needed. Credentials stay in Yoma's own `~/.yoma/auth.json`; existing Codex, Pi CLI and CC Switch logins are not synchronized.
 
-An API key is needed for the agent. The serial monitor and manual GDB controls work without one.
+The serial monitor and manual GDB controls work without a model connection.
 
 - First time: the banner at the top says "No API key configured yet" → click **Connect**
-- Afterwards: top-left menu **File → Settings** (or `Ctrl+,`) → **Providers** on the left → pick DeepSeek / Kimi → **Connect** → paste your API key
+- Afterwards: top-left menu **File → Settings** (or `Ctrl+,`) → **Providers** → choose a provider → **Connect**. For ChatGPT, complete authorization in the browser; for other providers, enter your API key.
 
 ### 3. Toolchains (compiler / CMake / OpenOCD / GDB …)
 

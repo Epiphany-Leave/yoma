@@ -1,4 +1,9 @@
 export const dict = {
+  "provider.connect.subscription.description": "Sign in with your ChatGPT subscription. This does not provide OpenAI API credit. Credentials stay in Yoma on this computer.",
+  "provider.connect.subscription.browser": "Sign in with ChatGPT",
+  "provider.connect.subscription.device": "Use device code",
+  "provider.connect.subscription.waiting": "Waiting for authorization…",
+  "provider.connect.subscription.open": "Open authorization page",
   "session.workbench.prompt": "Describe a firmware task… / commands, @ source files",
   "session.gdbControl.title": "Live debugger",
   "session.gdbControl.working": "Working…",

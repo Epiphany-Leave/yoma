@@ -559,6 +559,27 @@ try {
   check("首屏没崩到错误页", (await evaluate<boolean>(CRASHED)) === false)
   drain("首屏")
 
+  // Subscription setup is a real renderer view; opening it must not start a login by itself.
+  await clickText(["设置", "Settings"])
+  check("设置对话框可打开", await waitFor(`!!document.querySelector('.settings-v2-dialog')`, APPEAR_TIMEOUT_MS))
+  await evaluate(`(() => { const tab = [...document.querySelectorAll('[role="tab"]')].find(e => /提供商|Providers/.test(e.textContent)); tab?.click() })()`)
+  const codexRow = `[...document.querySelectorAll('.settings-v2-provider-row')].find(e => e.textContent.includes('OpenAI Codex / ChatGPT'))`
+  check("提供商列表列出 ChatGPT 订阅入口", await waitFor(`!!(${codexRow})`, APPEAR_TIMEOUT_MS))
+  await evaluate(`(${codexRow})?.querySelector('button')?.click()`)
+  check("ChatGPT 登录对话框渲染", await waitFor(`!!document.querySelector('[data-component="subscription-login"]')`, APPEAR_TIMEOUT_MS))
+  check("订阅登录提供浏览器和设备码两种方式", await evaluate<boolean>(`(() => {
+    const view = document.querySelector('[data-component="subscription-login"]');
+    return view.textContent.includes('ChatGPT') && view.querySelectorAll('button').length === 2 && !view.querySelector('input');
+  })()`))
+  check("打开对话框不会自动发起登录", await evaluate<boolean>(`window.api.kernel.request('auth.loginStatus', {}).then(s => !s || s.status !== 'pending')`))
+  if (process.env.YOMA_PAINT_SCREENSHOT_AUTH) {
+    const shot = await send("Page.captureScreenshot", { format: "png" })
+    writeFileSync(process.env.YOMA_PAINT_SCREENSHOT_AUTH, Buffer.from(shot.result!.data as string, "base64"))
+  }
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 })
+  drain("ChatGPT 登录视图")
+
   // ------------------------------------------------------------------ 2. 工程名单
   const stored = json({
     projects: { local: [{ worktree: workspace, expanded: true }] },

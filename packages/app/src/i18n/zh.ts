@@ -1,4 +1,9 @@
 export const dict = {
+  "provider.connect.subscription.description": "使用 ChatGPT 订阅登录。这不等同于 OpenAI API 余额，凭据保存在本机 Yoma 中。",
+  "provider.connect.subscription.browser": "使用 ChatGPT 登录",
+  "provider.connect.subscription.device": "使用设备码",
+  "provider.connect.subscription.waiting": "等待授权…",
+  "provider.connect.subscription.open": "打开授权页面",
   "session.workbench.prompt": "描述固件问题… / 命令，@ 引用源码",
   "session.gdbControl.title": "实时调试器",
   "session.gdbControl.working": "执行中…",

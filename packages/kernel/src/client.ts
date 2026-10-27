@@ -105,6 +105,10 @@ export interface KernelClient {
     list(params: { directory: string }): Promise<AgentInfo[]>
   }
   model: {
+    loginStart(params: KernelParams<"auth.loginStart">): Promise<KernelResult<"auth.loginStart">>
+    loginStatus(id?: string): Promise<KernelResult<"auth.loginStatus">>
+    loginReply(params: KernelParams<"auth.loginReply">): Promise<void>
+    loginCancel(id: string): Promise<void>
     list(): Promise<ProviderInfo[]>
     /** 联网刷新模型目录(几秒);列表里出现新模型靠它。 */
     refresh(): Promise<ProviderInfo[]>
@@ -204,6 +208,10 @@ export function createKernelClient(transport: KernelTransport): KernelClient {
       list: (params) => call("agent.list", params),
     },
     model: {
+      loginStart: (params) => call("auth.loginStart", params),
+      loginStatus: (id) => call("auth.loginStatus", { id }),
+      loginReply: (params) => call("auth.loginReply", params),
+      loginCancel: (id) => call("auth.loginCancel", { id }),
       list: () => call("model.list", undefined),
       /** 联网刷新模型目录(几秒);列表里出现新模型靠它。 */
       refresh: () => call("model.refresh", undefined),

@@ -117,6 +117,10 @@ export interface PreflightReport {
 }
 
 export interface KernelMethods {
+  "auth.loginStart": { params: { providerID: string; method?: "browser" | "device_code" }; result: import("./auth-view.ts").AuthLoginView }
+  "auth.loginStatus": { params: { id?: string }; result: import("./auth-view.ts").AuthLoginView | undefined }
+  "auth.loginReply": { params: { id: string; promptID: string; value: string }; result: void }
+  "auth.loginCancel": { params: { id: string }; result: void }
   "project.context": { params: { directory: string }; result: ProjectContextView }
   "project.configure": { params: { directory: string; revision: string; profile: ProjectProfile }; result: ProjectContextView }
   "project.remember": { params: { directory: string; revision: string; memory: MemoryInput }; result: ProjectContextView }
@@ -335,6 +339,7 @@ export type KernelHandlers = {
  * 投影器必须按这个顺序发,别指望 UI 会报错提醒你。
  */
 export type KernelEvent =
+  | { type: "auth.login"; login: import("./auth-view.ts").AuthLoginView }
   /** host 就绪或重连成功。前端收到就重新 bootstrap。 */
   | { type: "kernel.connected"; version: string }
   | { type: "kernel.error"; message: string; sessionID?: string }
